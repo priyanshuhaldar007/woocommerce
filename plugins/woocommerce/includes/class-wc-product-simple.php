@@ -45,7 +45,7 @@ class WC_Product_Simple extends WC_Product {
 			'sanitize_text_field',
 			array_keys( wp_unslash( $_GET ) ) // phpcs:ignore WordPress.Security.NonceVerification.Recommended
 		);
-		$params = array_diff( $get_keys, array( 'add-to-cart' ) );
+		$params   = array_diff( $get_keys, array( 'add-to-cart' ) );
 
 		// Remove ALL existing query params except allowed ones.
 		$url = $this->is_purchasable() && $this->is_in_stock() ? remove_query_arg(
