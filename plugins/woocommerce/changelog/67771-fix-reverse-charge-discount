@@ -1,0 +1,4 @@
+Significance: patch
+Type: fix
+
+Orders: keep the full discount on line items that carry no tax, such as EU reverse-charge (0% VAT) orders, instead of removing tax from the discount a second time.

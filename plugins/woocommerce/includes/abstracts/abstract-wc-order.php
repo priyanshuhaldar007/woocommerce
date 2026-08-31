@@ -1657,6 +1657,29 @@ abstract class WC_Abstract_Order extends WC_Abstract_Legacy_Order {
 	}
 
 	/**
+	 * Determine whether a coupon discount calculated for a line item is tax inclusive.
+	 *
+	 * WC_Discounts builds the discountable price of an order line item from its subtotal plus its
+	 * subtotal tax, so a discount is only tax inclusive when the line item actually carried tax. The
+	 * store wide "prices include tax" option is not enough on its own: a line item can be untaxed
+	 * while that option is enabled, for example on an EU reverse-charge (0% VAT) order or for a VAT
+	 * exempt customer. Removing tax from such a discount would shrink the discount and inflate the
+	 * order total.
+	 *
+	 * @since 11.2.0
+	 * @see https://github.com/woocommerce/woocommerce/issues/67771
+	 *
+	 * @param WC_Order_Item $item Line item the discount was applied to.
+	 * @return bool True when tax must be removed from the discount amount, false otherwise.
+	 */
+	private function discount_amount_includes_tax( $item ) {
+		return $this->get_prices_include_tax()
+			&& wc_tax_enabled()
+			&& ProductTaxStatus::TAXABLE === $item->get_tax_status()
+			&& 0.0 < (float) $item->get_subtotal_tax();
+	}
+
+	/**
 	 * After applying coupons via the WC_Discounts class, update line items.
 	 *
 	 * @since 3.2.0
@@ -1672,8 +1695,8 @@ abstract class WC_Abstract_Order extends WC_Abstract_Legacy_Order {
 			foreach ( $item_discounts as $item_id => $amount ) {
 				$item = $this->get_item( $item_id, false );
 
-				// If the prices include tax, discounts should be taken off the tax inclusive prices like in the cart.
-				if ( $this->get_prices_include_tax() && wc_tax_enabled() && ProductTaxStatus::TAXABLE === $item->get_tax_status() ) {
+				// If the discount was taken off a tax inclusive price, as it is in the cart, take the tax back out of it again.
+				if ( $this->discount_amount_includes_tax( $item ) ) {
 					$taxes = WC_Tax::calc_tax( $amount, $this->get_tax_rates( $item->get_tax_class(), $tax_location ), true );
 
 					// Use unrounded taxes so totals will be re-calculated accurately, like in cart.
@@ -1730,6 +1753,15 @@ abstract class WC_Abstract_Order extends WC_Abstract_Legacy_Order {
 					$item = $this->get_item( $item_id, false );
 
 					if ( ProductTaxStatus::TAXABLE !== $item->get_tax_status() || ! wc_tax_enabled() ) {
+						continue;
+					}
+
+					/*
+					 * With tax inclusive pricing the discount only holds tax when the line item itself was
+					 * taxed. On an untaxed line, such as an EU reverse-charge (0% VAT) order, the discount is
+					 * already a net amount, so there is no tax to record against the coupon or to strip out.
+					 */
+					if ( $this->get_prices_include_tax() && ! $this->discount_amount_includes_tax( $item ) ) {
 						continue;
 					}
 

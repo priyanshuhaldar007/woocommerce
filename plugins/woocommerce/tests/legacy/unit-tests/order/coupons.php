@@ -452,6 +452,84 @@ class WC_Tests_Order_Coupons extends WC_Unit_Test_Case {
 	}
 
 	/**
+	 * Test: a discount on a line item that carries no tax keeps its full value.
+	 *
+	 * Reproduces issue #67771. The store sells at tax inclusive prices and a tax rate is configured,
+	 * but the line item itself was sold VAT free under the EU reverse charge, so its subtotal is
+	 * already a net amount. Tax must not be taken out of the discount a second time.
+	 *
+	 * @see https://github.com/woocommerce/woocommerce/issues/67771
+	 */
+	public function test_discount_on_untaxed_line_item_with_tax_inclusive_prices() {
+		update_option( 'woocommerce_prices_include_tax', 'yes' );
+		update_option( 'woocommerce_calc_taxes', 'yes' );
+
+		// The rate stays configured in the store; it is the reverse charge that zeroes this order.
+		WC_Tax::_insert_tax_rate(
+			array(
+				'tax_rate_country'  => '',
+				'tax_rate_state'    => '',
+				'tax_rate'          => '25.0000',
+				'tax_rate_name'     => 'VAT',
+				'tax_rate_priority' => '1',
+				'tax_rate_compound' => '0',
+				'tax_rate_shipping' => '1',
+				'tax_rate_order'    => '1',
+				'tax_rate_class'    => '',
+			)
+		);
+
+		$product = WC_Helper_Product::create_simple_product();
+		$product->set_regular_price( 327 );
+		$product->save();
+		$product = wc_get_product( $product->get_id() );
+
+		$coupon = new WC_Coupon();
+		$coupon->set_code( 'reverse-charge-20' );
+		$coupon->set_amount( 20 );
+		$coupon->set_discount_type( 'percent' );
+		$coupon->save();
+
+		$order = wc_create_order(
+			array(
+				'status'        => OrderStatus::PENDING,
+				'customer_id'   => 1,
+				'customer_note' => '',
+				'total'         => '',
+			)
+		);
+
+		// 3 x 327 displayed incl. 25% VAT, billed VAT free, so the line holds 784.80 net and no tax.
+		$product_item = new WC_Order_Item_Product();
+		$product_item->set_props(
+			array(
+				'product'  => $product,
+				'quantity' => 3,
+				'subtotal' => 784.80,
+				'total'    => 784.80,
+			)
+		);
+		$product_item->save();
+
+		$order->add_item( $product_item );
+		$order->update_meta_data( 'is_vat_exempt', 'yes' );
+		$order->calculate_totals( true );
+		$order->save();
+
+		// Sanity check: the reverse charge leaves the order without any tax to discount.
+		$this->assertEquals( 0.0, (float) $order->get_total_tax() );
+
+		$order->apply_coupon( $coupon->get_code() );
+
+		$applied_coupon = current( $order->get_items( 'coupon' ) );
+
+		// A flat 20% of the net 784.80, with no VAT to take back out of it.
+		$this->assertEquals( 156.96, (float) $applied_coupon->get_discount() );
+		$this->assertEquals( 0.0, (float) $applied_coupon->get_discount_tax() );
+		$this->assertEquals( '627.84', $order->get_total() );
+	}
+
+	/**
 	 * @testdox No error is thrown when coupons are recalculated if an applied coupon with custom discount type is deleted and the code that defined the discount type has disappeared.
 	 */
 	public function test_custom_discount_type_removed_and_coupon_trashed() {
