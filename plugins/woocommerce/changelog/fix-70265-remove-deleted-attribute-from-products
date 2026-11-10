@@ -1,0 +1,4 @@
+Significance: patch
+Type: fix
+
+Stop a deleted product attribute from reappearing, empty, on products when an attribute with the same slug is created again.
