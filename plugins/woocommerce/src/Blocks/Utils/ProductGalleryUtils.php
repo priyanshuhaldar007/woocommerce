@@ -273,6 +273,8 @@ class ProductGalleryUtils {
 			'src'        => $full_src ? $full_src[0] : '',
 			'srcset'     => $srcset ? $srcset : '',
 			'sizes'      => $sizes ? $sizes : '',
+			'width'      => $full_src ? (int) $full_src[1] : 0,
+			'height'     => $full_src ? (int) $full_src[2] : 0,
 			'alt'        => $alt ? $alt : sprintf(
 				/* translators: 1: Product title 2: Image number */
 				__( '%1$s - Image %2$d', 'woocommerce' ),

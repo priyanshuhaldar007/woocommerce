@@ -1,0 +1,4 @@
+Significance: patch
+Type: performance
+
+Stop the closed Product Gallery pop-up from downloading its images until it is opened.

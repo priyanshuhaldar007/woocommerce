@@ -211,6 +211,48 @@ class ProductGallery extends \WP_UnitTestCase {
 	}
 
 	/**
+	 * @testdox Should lazy-load dialog images and reserve their dimensions.
+	 */
+	public function test_product_gallery_dialog_images_are_lazy_loaded_with_dimensions(): void {
+		$data = $this->create_product_with_gallery( 3 );
+
+		foreach ( array_merge( array( $data['main_image_id'] ), $data['gallery_image_ids'] ) as $image_id ) {
+			update_post_meta( $image_id, '_wp_attached_file', 'image-' . $image_id . '.jpg' );
+			update_post_meta(
+				$image_id,
+				'_wp_attachment_metadata',
+				array(
+					'width'  => 1600,
+					'height' => 1200,
+					'file'   => 'image-' . $image_id . '.jpg',
+				)
+			);
+		}
+
+		$markup = $this->render_product_gallery( $data['product']->get_id() );
+
+		$dialog_start = strpos( $markup, '<dialog' );
+		$this->assertNotFalse( $dialog_start );
+		$dialog = substr( $markup, $dialog_start, strpos( $markup, '</dialog>', $dialog_start ) - $dialog_start );
+
+		$processor  = new \WP_HTML_Tag_Processor( $dialog );
+		$img_count  = 0;
+		$dimensions = 0;
+		while ( $processor->next_tag( 'img' ) ) {
+			++$img_count;
+			$this->assertSame( 'lazy', $processor->get_attribute( 'loading' ) );
+			if ( $processor->get_attribute( 'width' ) && $processor->get_attribute( 'height' ) ) {
+				++$dimensions;
+			}
+		}
+
+		$this->assertGreaterThan( 0, $img_count );
+		$this->assertSame( $img_count, $dimensions );
+
+		$this->cleanup_product_data( $data );
+	}
+
+	/**
 	 * @testdox Should expose Product Image style aspect ratios as large image CSS variables.
 	 */
 	public function test_product_gallery_exposes_custom_product_image_aspect_ratio_css_variables(): void {
